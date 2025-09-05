@@ -23,7 +23,7 @@ sns.set_palette("husl")
 class DataProcessor:
     """数据预处理类 - 处理附件.xlsx"""
     
-    def __init__(self, file_path: str = '../附件.xlsx'):
+    def __init__(self, file_path: str = '/kaggle/working/mathmodel/附件.xlsx'):
         self.file_path = file_path
         self.raw_data = None
         self.male_data = None
@@ -107,7 +107,7 @@ class DataProcessor:
             if male_data['GC_content'].max() < 1:
                 male_data['GC_content'] = male_data['GC_content'] * 100
                 print(f"   ✓ GC含量：{male_data['GC_content'].min():.1f}% ~ {male_data['GC_content'].max():.1f}%")
-                
+
         # 解析孕周数据（周数+天数 → 小数周）
         def parse_week(week_str):
             """解析孕周，如'12周+3天' → 12.43"""
