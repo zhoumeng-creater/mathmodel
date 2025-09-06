@@ -39,7 +39,7 @@ class DataProcessor:
         except FileNotFoundError:
             # 尝试备用文件名
             try:
-                self.file_path = '附件_精简样例.xlsx'
+                self.file_path = '../附件_精简样例.xlsx'
                 self.raw_data = pd.read_excel(self.file_path)
                 print(f"✅ 使用备用文件：{self.file_path}")
                 print(f"   数据规模：{len(self.raw_data)} 条记录")

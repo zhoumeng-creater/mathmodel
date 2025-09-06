@@ -159,8 +159,10 @@ class GeneticAlgorithm:
         
         best_chromosome = None
         best_fitness = float('-inf')
-        
+        print(f"  遗传算法开始：种群={self.pop_size}, 迭代={max_generations}")  # ✅ 添加
+
         for generation in range(max_generations):
+            print(f"\n  === 第 {generation+1}/{max_generations} 代 ===")  # ✅ 添加
             # 评估适应度
             fitness_scores = [self.fitness(chrom, evaluator) for chrom in population]
             
@@ -327,25 +329,31 @@ class NIPTOptimizer:
         self.bmi_max = data['BMI'].max()
         
     def evaluate_solution(self, boundaries: np.ndarray) -> float:
-        """
-        评估一个分组方案的总风险
-        这是遗传算法的评估函数
-        """
+        """评估一个分组方案的总风险"""
         k = len(boundaries) - 1
+        print(f"      评估分组方案: K={k}, 边界={[f'{b:.1f}' for b in boundaries]}")  # ✅ 添加
+        
         grouping = BMIGrouping(k, boundaries)
         
         # 检查分组平衡约束
         if not grouping.check_balance_constraint(self.data, n_min=10):
-            return float('inf')  # 违反约束，返回极大风险
+            print(f"      ❌ 分组不平衡，返回极大风险")  # ✅ 添加
+            return float('inf')
         
         # 分配样本到各组
         grouped_data = grouping.assign_groups(self.data)
+        
+        # 输出分组统计  # ✅ 添加这段
+        for g in range(k):
+            group_size = len(grouped_data[grouped_data['group'] == g])
+            print(f"      组{g+1}: {group_size}个样本")
         
         # 优化各组时点并计算总风险
         total_risk = 0
         time_points = []
         
         for g in range(k):
+            print(f"      优化组{g+1}的检测时点...")  # ✅ 添加
             group_data = grouped_data[grouped_data['group'] == g]
             if len(group_data) == 0:
                 return float('inf')
@@ -356,16 +364,10 @@ class NIPTOptimizer:
                 group_data, bmi_mean
             )
             
+            print(f"        最优时点: {best_t}周, 风险: {group_risk:.4f}")  # ✅ 添加
+            
             time_points.append(best_t)
             total_risk += group_risk * len(group_data)
-        
-        # 检查并调整单调性约束
-        if not self.time_optimizer.check_monotonicity_constraint(time_points):
-            # 强制满足单调性（作为软约束，添加惩罚）
-            total_risk *= 1.2  # 20%惩罚
-        
-        # 返回平均风险
-        return total_risk / len(self.data)
     
     def optimize(self, 
                 k_range: List[int] = [3, 4, 5],
