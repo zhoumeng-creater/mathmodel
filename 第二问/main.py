@@ -23,7 +23,7 @@ sns.set_palette("husl")
 class DataProcessor:
     """数据预处理类 - 处理附件.xlsx"""
     
-    def __init__(self, file_path: str = '../附件.xlsx'):
+    def __init__(self, file_path: str = '/kaggle/input/mathdata/.xlsx'):
         self.file_path = file_path
         self.raw_data = None
         self.male_data = None
@@ -39,7 +39,7 @@ class DataProcessor:
         except FileNotFoundError:
             # 尝试备用文件名
             try:
-                self.file_path = '附件_精简样例.xlsx'
+                self.file_path = '/kaggle/working/mathmodel/附件.xlsx'
                 self.raw_data = pd.read_excel(self.file_path)
                 print(f"✅ 使用备用文件：{self.file_path}")
                 print(f"   数据规模：{len(self.raw_data)} 条记录")
