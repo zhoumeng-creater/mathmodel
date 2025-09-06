@@ -41,7 +41,7 @@ class NIPTSolver:
         
     def preprocess_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        数据预处理
+        数据预处理 - 完全借鉴第三问的成功方法
         
         参数:
             data: 原始数据
@@ -49,71 +49,216 @@ class NIPTSolver:
         返回:
             处理后的男胎数据
         """
-        # 打印列名以便调试
-        print("数据列名:", data.columns.tolist()[:10])  # 显示前10个列名
+        print(f"原始数据形状: {data.shape}")
+        print(f"前5行前10列预览:")
+        print(data.iloc[:5, :10])
         
-        # 筛选男胎数据（Y染色体浓度非空）
-        # 注意：Y染色体浓度在Excel中可能是小数形式（0.045表示4.5%）
-        male_data = data[data['Y染色体浓度'].notna()].copy()
+        # 创建处理后的DataFrame
+        processed_df = pd.DataFrame()
         
-        # 将Y染色体浓度转换为百分比（如果是小数形式）
-        if male_data['Y染色体浓度'].max() < 1:  # 说明是小数形式
-            male_data['Y染色体浓度'] = male_data['Y染色体浓度'] * 100
-            print("Y染色体浓度已转换为百分比形式")
+        # 按列索引读取（A=0, B=1, C=2, ...）
+        # C列(索引2): 年龄
+        if data.shape[1] > 2:
+            processed_df['年龄'] = pd.to_numeric(data.iloc[:, 2], errors='coerce')
         
-        # 提取孕周数值（从"周数+天数"格式中）
-        def parse_week(week_str):
-            if pd.isna(week_str):
-                return np.nan
-            try:
-                week_str = str(week_str)
-                if '+' in week_str:
-                    parts = week_str.split('+')
-                    weeks = float(parts[0])
-                    days = float(parts[1]) if len(parts) > 1 else 0
-                    return weeks + days / 7
+        # D列(索引3): 身高
+        if data.shape[1] > 3:
+            processed_df['身高'] = pd.to_numeric(data.iloc[:, 3], errors='coerce')
+        
+        # E列(索引4): 体重
+        if data.shape[1] > 4:
+            processed_df['体重'] = pd.to_numeric(data.iloc[:, 4], errors='coerce')
+        
+        # J列(索引9): 检测孕周 - 先读取原始值
+        if data.shape[1] > 9:
+            processed_df['Week_raw'] = data.iloc[:, 9]
+            print(f"\n孕周原始数据(J列)前10个值:")
+            print(data.iloc[:10, 9].tolist())
+        
+        # K列(索引10): BMI
+        if data.shape[1] > 10:
+            processed_df['BMI'] = pd.to_numeric(data.iloc[:, 10], errors='coerce')
+        
+        # V列(索引21): Y染色体浓度 - 关键列！
+        if data.shape[1] > 21:
+            print(f"\nV列(索引21)前10个值:")
+            print(data.iloc[:10, 21].tolist())
+            y_values = pd.to_numeric(data.iloc[:, 21], errors='coerce')
+            
+            # 统计非空值
+            non_na_count = y_values.notna().sum()
+            print(f"Y染色体浓度非空值数量: {non_na_count}")
+            
+            if non_na_count > 0:
+                # 检查数值范围
+                y_min = y_values.dropna().min()
+                y_max = y_values.dropna().max()
+                print(f"Y染色体浓度原始范围: {y_min:.6f} - {y_max:.6f}")
+                
+                # 判断是否需要转换（如果最大值小于1，说明是小数形式）
+                if y_max < 1:
+                    print(f"检测到小数形式，转换为百分比")
+                    processed_df['Y染色体浓度'] = y_values * 100
                 else:
-                    # 可能是纯数字格式
-                    return float(week_str)
-            except:
-                return np.nan
+                    processed_df['Y染色体浓度'] = y_values
+            else:
+                print(f"警告：Y染色体浓度列全为空！")
+                processed_df['Y染色体浓度'] = y_values
+        else:
+            print(f"错误：数据只有{data.shape[1]}列，无法读取V列(需要至少22列)")
+            return pd.DataFrame()
         
-        male_data['孕周'] = male_data['孕妇本次检测时的孕周（周数+天数）'].apply(parse_week)
+        print(f"\n筛选前样本数: {len(processed_df)}")
+        print(f"Y染色体浓度列的统计:")
+        print(f"  - 非空值: {processed_df['Y染色体浓度'].notna().sum()}")
+        print(f"  - 空值: {processed_df['Y染色体浓度'].isna().sum()}")
         
-        # 创建简化列名映射
-        male_data['年龄'] = male_data['孕妇年龄']
-        male_data['身高'] = male_data['孕妇身高']
-        male_data['体重'] = male_data['孕妇体重']
-        male_data['BMI'] = male_data['孕妇BMI指标']
+        # 筛选男胎数据（Y染色体浓度不为空）
+        male_mask = processed_df['Y染色体浓度'].notna()
+        processed_df = processed_df[male_mask].copy()
         
-        # 删除缺失关键数据的行
-        required_cols = ['孕周', 'BMI', '年龄', '身高', '体重', 'Y染色体浓度']
-        male_data = male_data.dropna(subset=required_cols)
+        print(f"筛选男胎后样本数: {len(processed_df)}")
         
-        # 打印数据范围以便调试
-        print(f"Y染色体浓度范围: {male_data['Y染色体浓度'].min():.2f}% - {male_data['Y染色体浓度'].max():.2f}%")
-        print(f"BMI范围: {male_data['BMI'].min():.1f} - {male_data['BMI'].max():.1f}")
-        print(f"孕周范围: {male_data['孕周'].min():.1f} - {male_data['孕周'].max():.1f}")
+        if len(processed_df) == 0:
+            print("警告：没有找到男胎数据！检查是否列索引偏移...")
+            # 如果没有数据，返回空DataFrame
+            return pd.DataFrame()
         
-        # 异常值处理（IQR方法）
+        # 处理孕周数据 - 关键步骤！
+        if 'Week_raw' in processed_df.columns:
+            def parse_week(week_str):
+                """解析孕周字符串，转换为数值"""
+                if pd.isna(week_str):
+                    return np.nan
+                    
+                try:
+                    if isinstance(week_str, (int, float)):
+                        return float(week_str)
+                    
+                    week_str = str(week_str).strip()
+                    
+                    # 处理 "12w+3" 格式（w表示周）
+                    if 'w' in week_str.lower():
+                        # 去除w/W，然后按+分割
+                        week_str = week_str.lower().replace('w', '')
+                        if '+' in week_str:
+                            parts = week_str.split('+')
+                            weeks = float(parts[0])
+                            days = float(parts[1]) if len(parts) > 1 else 0
+                            return weeks + days / 7.0
+                        else:
+                            return float(week_str)
+                    # 处理 "12+3" 格式
+                    elif '+' in week_str:
+                        parts = week_str.split('+')
+                        weeks = float(parts[0])
+                        days = float(parts[1]) if len(parts) > 1 else 0
+                        return weeks + days / 7.0
+                    # 处理 "12周3天" 格式
+                    elif '周' in week_str:
+                        import re
+                        # 提取数字
+                        numbers = re.findall(r'\d+', week_str)
+                        if numbers:
+                            weeks = float(numbers[0])
+                            days = float(numbers[1]) if len(numbers) > 1 else 0
+                            return weeks + days / 7.0
+                        return np.nan
+                    else:
+                        # 尝试直接转换为数字
+                        return float(week_str)
+                except Exception as e:
+                    print(f"  解析孕周失败: '{week_str}' - {e}")
+                    return np.nan
+            
+            processed_df['孕周'] = processed_df['Week_raw'].apply(parse_week)
+            processed_df = processed_df.drop('Week_raw', axis=1)
+            
+            # 打印解析结果
+            print(f"\n孕周解析结果:")
+            print(f"  成功解析: {processed_df['孕周'].notna().sum()}")
+            print(f"  解析失败: {processed_df['孕周'].isna().sum()}")
+            if processed_df['孕周'].notna().sum() > 0:
+                print(f"  孕周范围: {processed_df['孕周'].min():.1f} - {processed_df['孕周'].max():.1f}")
+        else:
+            print("警告：没有找到孕周数据！")
+            processed_df['孕周'] = 15  # 使用默认值
+        
+        # 处理缺失值 - 使用中位数填充
+        print(f"\n处理缺失值前的统计:")
+        for col in processed_df.columns:
+            na_count = processed_df[col].isna().sum()
+            if na_count > 0:
+                print(f"  {col}: {na_count}个缺失值")
+        
+        numeric_columns = processed_df.select_dtypes(include=[np.number]).columns
+        for col in numeric_columns:
+            if col in processed_df.columns:
+                median_value = processed_df[col].median()
+                if pd.notna(median_value):
+                    processed_df[col].fillna(median_value, inplace=True)
+                else:
+                    # 使用默认值
+                    default_vals = {'年龄': 30, '身高': 165, '体重': 60, 'BMI': 22, '孕周': 15}
+                    processed_df[col].fillna(default_vals.get(col, 0), inplace=True)
+        
+        # 删除关键特征仍有缺失的行
+        essential_cols = ['孕周', 'BMI', 'Y染色体浓度']
+        before_drop = len(processed_df)
+        processed_df = processed_df.dropna(subset=[col for col in essential_cols if col in processed_df.columns])
+        print(f"\n删除关键列缺失值: {before_drop} -> {len(processed_df)}")
+        
+        if len(processed_df) == 0:
+            print("警告：处理后没有有效数据！")
+            return pd.DataFrame()
+        
+        # 过滤异常值 - 使用更宽松的标准
+        initial_count = len(processed_df)
+        
+        # 基于IQR方法过滤异常值，但使用2.5倍IQR（更宽松）
         for col in ['BMI', 'Y染色体浓度']:
-            Q1 = male_data[col].quantile(0.25)
-            Q3 = male_data[col].quantile(0.75)
-            IQR = Q3 - Q1
-            lower = Q1 - 1.5 * IQR
-            upper = Q3 + 1.5 * IQR
-            before_count = len(male_data)
-            male_data = male_data[(male_data[col] >= lower) & (male_data[col] <= upper)]
-            after_count = len(male_data)
-            if before_count > after_count:
-                print(f"移除{col}异常值: {before_count - after_count}条")
+            if col in processed_df.columns:
+                Q1 = processed_df[col].quantile(0.25)
+                Q3 = processed_df[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 2.5 * IQR
+                upper_bound = Q3 + 2.5 * IQR
+                
+                before_filter = len(processed_df)
+                processed_df = processed_df[(processed_df[col] >= lower_bound) & (processed_df[col] <= upper_bound)]
+                after_filter = len(processed_df)
+                
+                if before_filter != after_filter:
+                    print(f"  IQR过滤 {col}: {before_filter} -> {after_filter} (移除{before_filter-after_filter}条)")
         
-        # 确保孕周在合理范围
-        male_data = male_data[(male_data['孕周'] >= 10) & (male_data['孕周'] <= 25)]
+        # 确保合理范围
+        before = len(processed_df)
+        processed_df = processed_df[(processed_df['孕周'] >= 10) & (processed_df['孕周'] <= 25)]
+        if len(processed_df) != before:
+            print(f"  孕周范围过滤: {before} -> {len(processed_df)} (移除{before-len(processed_df)}条)")
         
-        print(f"预处理完成，保留{len(male_data)}条有效数据")
+        before = len(processed_df)
+        processed_df = processed_df[(processed_df['BMI'] >= 15) & (processed_df['BMI'] <= 50)]
+        if len(processed_df) != before:
+            print(f"  BMI范围过滤: {before} -> {len(processed_df)} (移除{before-len(processed_df)}条)")
         
-        return male_data
+        before = len(processed_df)  
+        processed_df = processed_df[(processed_df['Y染色体浓度'] >= 0) & (processed_df['Y染色体浓度'] <= 100)]
+        if len(processed_df) != before:
+            print(f"  Y浓度范围过滤: {before} -> {len(processed_df)} (移除{before-len(processed_df)}条)")
+        
+        if len(processed_df) > 0:
+            print(f"\n最终数据统计:")
+            print(f"  样本数: {len(processed_df)}")
+            print(f"  Y浓度范围: {processed_df['Y染色体浓度'].min():.2f}% - {processed_df['Y染色体浓度'].max():.2f}%")
+            print(f"  BMI范围: {processed_df['BMI'].min():.1f} - {processed_df['BMI'].max():.1f}")
+            print(f"  孕周范围: {processed_df['孕周'].min():.1f} - {processed_df['孕周'].max():.1f}周")
+        else:
+            print("\n警告：所有数据被过滤！")
+        
+        print(f"\n预处理完成，保留{len(processed_df)}条有效数据")
+        
+        return processed_df
     
     def two_stage_optimization(self, data: pd.DataFrame) -> Dict:
         """

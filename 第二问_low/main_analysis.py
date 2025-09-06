@@ -44,12 +44,13 @@ class NIPTAnalyzer:
         """
         print(f"加载数据: {self.data_path}")
         try:
+            # 不指定header，让pandas自动处理
             self.raw_data = pd.read_excel(self.data_path)
             print(f"成功加载 {len(self.raw_data)} 条记录")
             
-            # 显示数据基本信息
-            male_count = self.raw_data['Y染色体浓度'].notna().sum()
-            female_count = self.raw_data['Y染色体浓度'].isna().sum()
+            # 使用列索引统计男女胎数据（列V，索引21是Y染色体浓度）
+            male_count = self.raw_data.iloc[:, 21].notna().sum()
+            female_count = self.raw_data.iloc[:, 21].isna().sum()
             print(f"男胎数据: {male_count} 条")
             print(f"女胎数据: {female_count} 条")
             
@@ -184,36 +185,53 @@ class NIPTAnalyzer:
         weeks = list(range(10, 26))
         bmi_groups = [f'组{i+1}\nBMI[{boundaries[i]:.0f}-{boundaries[i+1]:.0f})' 
                     for i in range(len(boundaries)-1)]
-        
+
         # 创建风险矩阵
         risk_matrix = np.zeros((len(bmi_groups), len(weeks)))
-        for i in range(len(bmi_groups)):
-            for j, week in enumerate(weeks):
-                # 计算延迟风险
-                delay_risk = self.evaluator.calculate_delay_risk(week, 12)
-                risk_matrix[i, j] = delay_risk
-        
-        # 绘制热力图
+
+        # 检查是否有evaluator可用
+        if self.solver and hasattr(self.solver, 'evaluator'):
+            # 使用solver中的evaluator
+            for i in range(len(bmi_groups)):
+                for j, week in enumerate(weeks):
+                    delay_risk = self.solver.evaluator.calculate_delay_risk(week, 12)
+                    risk_matrix[i, j] = delay_risk
+        else:
+            # 使用内置的延迟风险计算
+            for i in range(len(bmi_groups)):
+                for j, week in enumerate(weeks):
+                    # 计算延迟风险
+                    x = week - 12  # 12周为最优时点
+                    if x <= 0:
+                        delay_risk = 0
+                    elif 0 < x <= 2:
+                        delay_risk = 0.1 * x
+                    elif 2 < x <= 4:
+                        delay_risk = 0.2 + 0.3 * (x - 2)
+                    else:
+                        delay_risk = 0.8 + 0.5 * (x - 4)
+                    risk_matrix[i, j] = delay_risk
+
+        # 绘制热力图（后续代码不变）
         im = plt.imshow(risk_matrix, cmap='RdYlGn_r', aspect='auto', 
                         interpolation='nearest')
-        
-        # 设置坐标轴
+
         plt.xticks(range(len(weeks)), weeks)
         plt.yticks(range(len(bmi_groups)), bmi_groups)
         plt.xlabel('孕周', fontsize=14)
         plt.ylabel('BMI分组', fontsize=14)
         plt.title('检测风险热力图（★标记为最优检测时点）', 
                 fontsize=16, fontweight='bold', pad=20)
-        
+
         # 添加最优时点标记
         for i, time in enumerate(self.solution['detection_times']):
             plt.text(time-10, i, '★', ha='center', va='center', 
                     color='yellow', fontsize=24, fontweight='bold')
-        
+
         # 添加颜色条
         cbar = plt.colorbar(im, label='风险值', fraction=0.046, pad=0.04)
         cbar.ax.tick_params(labelsize=11)
-        
+
         plt.tight_layout()
         plt.show()
         
