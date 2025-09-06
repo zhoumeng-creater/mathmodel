@@ -179,6 +179,24 @@ class NIPT_Solver:
         
         # 设置图表风格
         plt.style.use('seaborn-v0_8-darkgrid')
+        # 然后设置中文字体（在样式之后设置，避免被覆盖）
+        # 根据系统选择合适的字体
+        import platform
+        system = platform.system()
+        
+        if system == 'Windows':
+            # Windows系统
+            plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
+        elif system == 'Darwin':  # macOS
+            plt.rcParams['font.sans-serif'] = ['PingFang SC', 'Heiti TC', 'DejaVu Sans']
+        else:  # Linux
+            plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'DejaVu Sans']
+        
+        # 确保负号正常显示
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        # 增加字体大小（可选）
+        plt.rcParams['font.size'] = 10
         
         groups = self.results['groups']
         optimal_t = self.results['optimal_timepoints']

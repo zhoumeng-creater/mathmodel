@@ -198,7 +198,7 @@ class DataProcessor:
         解析孕周字符串，转换为数值
         
         参数:
-            week_str: 孕周字符串（如"12+3"表示12周3天）
+            week_str: 孕周字符串（如"12w+3"表示12周3天，或"12+3"）
             
         返回:
             week: 孕周数值
@@ -211,7 +211,20 @@ class DataProcessor:
                 return float(week_str)
             
             week_str = str(week_str)
-            if '+' in week_str:
+            
+            # 处理 "12w+3" 格式（w表示周）
+            if 'w' in week_str.lower():
+                # 去除w/W，然后按+分割
+                week_str = week_str.lower().replace('w', '')
+                if '+' in week_str:
+                    parts = week_str.split('+')
+                    weeks = float(parts[0])
+                    days = float(parts[1]) if len(parts) > 1 else 0
+                    return weeks + days / 7.0
+                else:
+                    return float(week_str)
+            # 处理 "12+3" 格式
+            elif '+' in week_str:
                 parts = week_str.split('+')
                 weeks = float(parts[0])
                 days = float(parts[1]) if len(parts) > 1 else 0
@@ -254,6 +267,8 @@ class DataProcessor:
         返回:
             df: 过滤后的DataFrame
         """
+        initial_count = len(df)
+        
         # 基于IQR方法过滤异常值
         for col in ['BMI', 'Y_concentration', 'Week']:
             if col in df.columns:
@@ -262,12 +277,36 @@ class DataProcessor:
                 IQR = Q3 - Q1
                 lower_bound = Q1 - 1.5 * IQR
                 upper_bound = Q3 + 1.5 * IQR
+                
+                before_filter = len(df)
                 df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound)]
+                after_filter = len(df)
+                
+                if before_filter != after_filter:
+                    print(f"    IQR过滤 {col}: {before_filter} -> {after_filter} (移除{before_filter-after_filter}条)")
         
         # 确保合理范围
+        print(f"    过滤前Week范围: {df['Week'].min():.1f} - {df['Week'].max():.1f}")
+        
+        before = len(df)
         df = df[(df['Week'] >= 10) & (df['Week'] <= 25)]
+        if len(df) != before:
+            print(f"    Week范围过滤: {before} -> {len(df)} (移除{before-len(df)}条)")
+        
+        before = len(df)
         df = df[(df['BMI'] >= 15) & (df['BMI'] <= 50)]
+        if len(df) != before:
+            print(f"    BMI范围过滤: {before} -> {len(df)} (移除{before-len(df)}条)")
+        
+        before = len(df)
         df = df[(df['Y_concentration'] >= 0) & (df['Y_concentration'] <= 100)]
+        if len(df) != before:
+            print(f"    Y浓度范围过滤: {before} -> {len(df)} (移除{before-len(df)}条)")
+        
+        final_count = len(df)
+        if final_count == 0:
+            print(f"  警告：所有数据被过滤！初始{initial_count}条，最终0条")
+            print(f"  Week统计: min={df['Week'].min() if 'Week' in df.columns else 'N/A'}, max={df['Week'].max() if 'Week' in df.columns else 'N/A'}")
         
         return df
     
